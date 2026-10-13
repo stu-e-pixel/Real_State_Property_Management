@@ -136,7 +136,7 @@ const getLeaseAggregation = async (filters = {}) => {
   return leases;
 };
 
-class LeaseController {
+class LeaseControllers {
   // Create lease:
   async createLease(req, res) {
     try {
@@ -973,4 +973,4 @@ class LeaseController {
   }
 }
 
-module.exports = new LeaseController();
+module.exports = new LeaseControllers();

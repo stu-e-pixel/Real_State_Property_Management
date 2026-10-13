@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const reviewController = require("../../controllers/APIs/reviewController");
+const reviewController = require("../../controllers/APIs/ReviewControllers");
 const {
   authMiddleware,
   authorizeRoles,

@@ -29,7 +29,7 @@ const statuscode = require("../../utils/statuscode");
 const cloudinary = require("../../config/cloudinary.config");
 const verifyEmailOTP = require("../../utils/sendEmail");
 
-class AuthController {
+class AuthControllers {
   async register(req, res) {
     try {
       const { name, email, password, phone } = req.body;
@@ -2695,4 +2695,4 @@ async changePassword(req, res) {
   }
 }
 
-module.exports = new AuthController();
+module.exports = new AuthControllers();

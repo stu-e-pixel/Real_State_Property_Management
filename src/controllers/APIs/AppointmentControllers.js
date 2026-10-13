@@ -28,7 +28,7 @@ const checkAppointmentAccess = async (appointment, user) => {
   return false;
 };
 
-class AppointmentController {
+class AppointmentControllers {
   // Customer - create appointment:
   async createAppointment(req, res) {
     try {
@@ -452,4 +452,4 @@ class AppointmentController {
   // Check access - owner/agent:
 }
 
-module.exports = new AppointmentController();
+module.exports = new AppointmentControllers();

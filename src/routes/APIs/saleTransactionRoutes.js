@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const SaleTransactionController = require(
-  "../../controllers/APIs/saleTransactionController"
+  "../../controllers/APIs/SaleTransactionControllers"
 );
 
 const {authMiddleware,authorizeRoles} = require(

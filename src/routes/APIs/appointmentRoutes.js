@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const appointmentController = require("../../controllers/APIs/appointmentController");
+const appointmentController = require("../../controllers/APIs/AppointmentControllers");
 const {
   authMiddleware,
   authorizeRoles,

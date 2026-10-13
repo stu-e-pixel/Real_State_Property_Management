@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const leaseController = require("../../controllers/APIs/leaseController");
+const leaseController = require("../../controllers/APIs/LeaseControllers");
 const {authMiddleware, authorizeRoles} = require("../../middlewares/authMiddleware");
 const Validation = require("../../validations/validation");
 const {

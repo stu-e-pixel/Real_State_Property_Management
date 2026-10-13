@@ -106,7 +106,7 @@ const getSaleTransactionAggregation = (match = {}) => [
   { $sort: { createdAt: -1 } },
 ];
 
-class SaleTransactionController{
+class SaleTransactionControllers{
 
 async createSaleTransaction  (req, res)  {
   try {
@@ -683,4 +683,4 @@ async getAllSaleTransactionsAdmin(req, res) {
 
 }
 
-module.exports=new SaleTransactionController()
+module.exports=new SaleTransactionControllers()

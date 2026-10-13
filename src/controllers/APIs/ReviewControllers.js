@@ -3,7 +3,7 @@ const Property = require("../../models/property");
 const Appointment = require("../../models/appointmentModel");
 const mongoose = require("mongoose");
 
-class ReviewController {
+class ReviewControllers {
   // Create review:
   async createReview(req, res) {
     try {
@@ -1102,4 +1102,4 @@ async updateReviewStatusByOwner(req, res) {
 }
 }
 
-module.exports = new ReviewController();
+module.exports = new ReviewControllers();

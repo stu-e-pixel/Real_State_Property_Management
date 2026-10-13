@@ -13,7 +13,7 @@ const app = express();
 const Port = process.env.PORT;
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: ['http://localhost:5173', 'http://localhost:3000','https://frontend-real-state-prperty-managem-nine.vercel.app'],
   credentials: true,
   methods: ['GET','POST', 'PUT','PATCH',  'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-secret-key']

@@ -1,6 +1,7 @@
 const Review = require("../../models/reviewModel");
 const Property = require("../../models/property");
 const Appointment = require("../../models/appointmentModel");
+const mongoose = require("mongoose");
 
 class ReviewController {
   // Create review:
@@ -11,7 +12,7 @@ class ReviewController {
       const propertyData = await Property.findOne({
         _id: property,
         isDeleted: false,
-      }).select("_id title agent owner status");
+      }).select("_id title agent owner status approvalStatus");
 
       if (!propertyData) {
         return res.status(404).json({
@@ -20,7 +21,7 @@ class ReviewController {
         });
       }
 
-      if (propertyData.status !== "approved") {
+      if (propertyData.approvalStatus !== "Approved") {
         return res.status(400).json({
           success: false,
           message: "You can review only an approved property",
@@ -53,7 +54,7 @@ class ReviewController {
         });
       }
 
-      const rview = await Review.create({
+      const review = await Review.create({
         property,
         user: req.user._id,
         rating,
@@ -102,7 +103,7 @@ class ReviewController {
         {
           $lookup: {
             from: "properties",
-            localfield: "property",
+            localField: "property",
             foreignField: "_id",
             as: "propertyData",
           },
@@ -283,7 +284,7 @@ class ReviewController {
         {
           $lookup: {
             from: "users",
-            localfield: "user",
+            localField: "user",
             foreignField: "_id",
             as: "userData",
           },
@@ -673,6 +674,432 @@ class ReviewController {
       });
     }
   }
+
+  // =====================================================
+  // OWNER — view reviews on their properties (no agent assigned)
+  // =====================================================
+
+  async getOwnerReviews(req, res) {
+    try {
+      const ownerId = req.user._id;
+      const role = String(req.user.role || "").toLowerCase();
+
+      if (role !== "owner") {
+        return res.status(403).json({
+          success: false,
+          message: "Only owners can access this endpoint",
+        });
+      }
+
+      console.log("🔍 GET OWNER REVIEWS — ownerId:", ownerId);
+
+      const reviews = await Review.aggregate([
+        // 1. Lookup the property for every review
+        {
+          $lookup: {
+            from: "properties",
+            localField: "property",
+            foreignField: "_id",
+            as: "propertyData",
+          },
+        },
+        {
+          $unwind: {
+            path: "$propertyData",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // 2. Filter — property owned by this owner AND no agent assigned
+        {
+          $match: {
+            "propertyData.owner": new mongoose.Types.ObjectId(String(ownerId)),
+            $or: [
+              { "propertyData.agentId": null },
+              { "propertyData.agentId": { $exists: false } },
+            ],
+            "propertyData.isDeleted": { $ne: true },
+          },
+        },
+
+        // 3. Populate the review user (customer)
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userData",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userData",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // 4. Reshape output
+        {
+          $project: {
+            _id: 1,
+            rating: 1,
+            comment: 1,
+            status: 1,
+            reason: 1,
+            reply: 1,
+            repliedAt: 1,
+            repliedBy: 1,
+            createdAt: 1,
+            updatedAt: 1,
+
+            property: {
+              _id: "$propertyData._id",
+              title: "$propertyData.title",
+              propertyType: "$propertyData.propertyType",
+              purpose: "$propertyData.purpose",
+              images: "$propertyData.images",
+            },
+
+            user: {
+              _id: "$userData._id",
+              name: "$userData.name",
+              email: "$userData.email",
+              image: "$userData.image",
+            },
+          },
+        },
+
+        { $sort: { createdAt: -1 } },
+      ]);
+
+      console.log("✅ Found owner reviews:", reviews.length);
+
+      return res.status(200).json({
+        success: true,
+        count: reviews.length,
+        reviews,
+      });
+    } catch (error) {
+      console.error("Get Owner Reviews:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch owner reviews",
+        error: error.message,
+      });
+    }
+  }
+
+  // =====================================================
+  // AGENT — view reviews on assigned properties (agentId = this agent)
+  // =====================================================
+
+  async getAgentReviews(req, res) {
+    try {
+      const agentId = req.user._id;
+      const role = String(req.user.role || "").toLowerCase();
+
+      if (role !== "agent") {
+        return res.status(403).json({
+          success: false,
+          message: "Only agents can access this endpoint",
+        });
+      }
+
+      console.log("🔍 GET AGENT REVIEWS — agentId:", agentId);
+
+      const reviews = await Review.aggregate([
+        // 1. Lookup the property for every review
+        {
+          $lookup: {
+            from: "properties",
+            localField: "property",
+            foreignField: "_id",
+            as: "propertyData",
+          },
+        },
+        {
+          $unwind: {
+            path: "$propertyData",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // 2. Filter — property assigned to this agent
+        {
+          $match: {
+            "propertyData.agentId": new mongoose.Types.ObjectId(
+              String(agentId),
+            ),
+            "propertyData.isDeleted": { $ne: true },
+          },
+        },
+
+        // 3. Populate the review user (customer)
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userData",
+          },
+        },
+        {
+          $unwind: {
+            path: "$userData",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+
+        // 4. Reshape output
+        {
+          $project: {
+            _id: 1,
+            rating: 1,
+            comment: 1,
+            status: 1,
+            reason: 1,
+            reply: 1,
+            repliedAt: 1,
+            repliedBy: 1,
+            createdAt: 1,
+            updatedAt: 1,
+
+            property: {
+              _id: "$propertyData._id",
+              title: "$propertyData.title",
+              propertyType: "$propertyData.propertyType",
+              purpose: "$propertyData.purpose",
+              images: "$propertyData.images",
+            },
+
+            user: {
+              _id: "$userData._id",
+              name: "$userData.name",
+              email: "$userData.email",
+              image: "$userData.image",
+            },
+          },
+        },
+
+        { $sort: { createdAt: -1 } },
+      ]);
+
+      console.log("✅ Found agent reviews:", reviews.length);
+
+      return res.status(200).json({
+        success: true,
+        count: reviews.length,
+        reviews,
+      });
+    } catch (error) {
+      console.error("Get Agent Reviews:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch agent reviews",
+        error: error.message,
+      });
+    }
+  }
+
+  // =====================================================
+  // OWNER / AGENT — Reply to a review on their property
+  // =====================================================
+
+  async replyToReview(req, res) {
+    try {
+      const { id } = req.params;
+      const { reply } = req.body;
+
+      const actorId = req.user._id;
+      const role = String(req.user.role || "").toLowerCase();
+
+      if (!["owner", "agent"].includes(role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only owners or agents can reply to reviews",
+        });
+      }
+
+      if (!reply || !reply.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Reply is required",
+        });
+      }
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid review ID",
+        });
+      }
+
+      // Fetch review + property
+      const review = await Review.findById(id);
+
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          message: "Review not found",
+        });
+      }
+
+      const property = await Property.findById(review.property);
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: "Property not found",
+        });
+      }
+
+      const propertyOwnerId = String(property.owner?._id || property.owner);
+      const propertyAgentId = property.agentId
+        ? String(property.agentId?._id || property.agentId)
+        : null;
+
+      const isOwner = role === "owner" && propertyOwnerId === String(actorId);
+
+      const isAssignedAgent =
+        role === "agent" &&
+        propertyAgentId !== null &&
+        propertyAgentId === String(actorId);
+
+      if (!isOwner && !isAssignedAgent) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to reply to this review",
+        });
+      }
+
+      review.reply = reply.trim();
+      review.repliedAt = new Date();
+      review.repliedBy = actorId;
+
+      await review.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Reply added successfully",
+        review,
+      });
+    } catch (error) {
+      console.error("Reply to Review:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to add reply",
+        error: error.message,
+      });
+    }
+  }
+
+  // =====================================================
+// OWNER / AGENT — Approve or reject a review
+// =====================================================
+
+async updateReviewStatusByOwner(req, res) {
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
+
+    const actorId = req.user._id;
+    const role = String(req.user.role || "").toLowerCase();
+
+    if (!["owner", "agent"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only owners or agents can update review status",
+      });
+    }
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be approved or rejected",
+      });
+    }
+
+    if (status === "rejected" && (!reason || !reason.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejection reason is required",
+      });
+    }
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid review ID",
+      });
+    }
+
+    const review = await Review.findById(id);
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found",
+      });
+    }
+
+    const property = await Property.findById(review.property);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    const propertyOwnerId = String(property.owner?._id || property.owner);
+    const propertyAgentId = property.agentId
+      ? String(property.agentId?._id || property.agentId)
+      : null;
+
+    // Owner handles when agentId is null
+    const isOwner =
+      role === "owner" && propertyOwnerId === String(actorId);
+
+    // Agent handles when agentId matches
+    const isAssignedAgent =
+      role === "agent" &&
+      propertyAgentId !== null &&
+      propertyAgentId === String(actorId);
+
+    if (!isOwner && !isAssignedAgent) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this review status",
+      });
+    }
+
+    review.status = status;
+
+    if (status === "rejected") {
+      review.reason = reason.trim();
+    } else {
+      review.reason = "";
+    }
+
+    await review.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        status === "approved"
+          ? "Review approved successfully"
+          : "Review rejected successfully",
+      review,
+    });
+  } catch (error) {
+    console.error("Update Review Status By Owner:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update review status",
+      error: error.message,
+    });
+  }
+}
 }
 
 module.exports = new ReviewController();

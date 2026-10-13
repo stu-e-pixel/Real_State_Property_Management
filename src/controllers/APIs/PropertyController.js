@@ -721,5 +721,42 @@ async getPublicApprovedProperties(req, res) {
     });
   }
 }
+
+// =====================================================
+// OWNER — Get all their properties
+// =====================================================
+
+async getOwnerProperties(req, res) {
+  try {
+    const ownerId = req.user._id;
+
+    const properties = await Property.find({
+      owner: ownerId,
+      isDeleted: false,
+    })
+      .select(
+        "title propertyType purpose price area bedrooms bathrooms images location status approvalStatus agentId owner createdAt"
+      )
+      .populate("owner", "name email phone image")
+      .populate("agentId", "name email phone image")
+      .sort({ createdAt: -1 });
+
+    return res.status(statuscode.OK).json({
+      status: true,
+      count: properties.length,
+      message: "Owner properties fetched successfully",
+      data: properties,
+    });
+  } catch (error) {
+    console.error("GET OWNER PROPERTIES ERROR:", error);
+
+    return res.status(statuscode.SERVER_ERROR).json({
+      status: false,
+      message: error.message,
+    });
+  }
+}
+
+
 }
 module.exports = new PropertyController();

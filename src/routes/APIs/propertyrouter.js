@@ -76,4 +76,11 @@ router.get(
   PropertyController.getPublicApprovedProperties
 );
 
+router.get(
+  "/owner/my-properties",
+  authMiddleware,
+  authorizeRoles("owner"),
+  PropertyController.getOwnerProperties
+);
+
 module.exports = router;

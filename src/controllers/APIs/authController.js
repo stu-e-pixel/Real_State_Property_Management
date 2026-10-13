@@ -106,14 +106,8 @@ class AuthController {
 
       const normalizedEmail = email.toLowerCase().trim();
 
-      // ============================================
-      // Find user from all models
-      // ============================================
-
       let existingUser = null;
       let userModel = null;
-
-      // 1. Check User model
       existingUser = await User.findOne({
         email
       });
@@ -122,7 +116,6 @@ class AuthController {
         userModel = "User";
       }
 
-      // 2. Check Owner model
       if (!existingUser) {
         existingUser = await Owner.findOne({
           email: normalizedEmail,
@@ -144,9 +137,7 @@ class AuthController {
         }
       }
 
-      // ============================================
-      // User not found
-      // ============================================
+      
 
       if (!existingUser) {
         return res.status(404).json({
@@ -155,9 +146,6 @@ class AuthController {
         });
       }
 
-      // ============================================
-      // Check email already verified
-      // ============================================
 
       if (existingUser.isEmailVerified) {
         return res.status(400).json({
@@ -960,7 +948,7 @@ async changePassword(req, res) {
 
     const resetLink =
       `${process.env.CLIENT_URL}` +
-      `/account/reset-password-confirm/` +
+      `/reset-password-confirm/` +
       `${user._id}/` +
       `${tokenLink}`;
 

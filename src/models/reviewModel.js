@@ -4,7 +4,7 @@ const reviewSchema = new mongoose.Schema(
   {
     property: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Property",
+      ref: "property",
       required: true,
     },
 
@@ -38,6 +38,23 @@ const reviewSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+
+    reply: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    repliedAt: {
+      type: Date,
+      default: null,
+    },
+
+    repliedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
 
   {
@@ -51,6 +68,5 @@ reviewSchema.index({
 });
 
 const ReviewModel = mongoose.model("Review", reviewSchema);
-
 
 module.exports = ReviewModel;

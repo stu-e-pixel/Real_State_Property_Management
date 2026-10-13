@@ -14,7 +14,6 @@ const {
   propertyReviewSchema,
   reviewActionSchema,
 } = require("../../validations/reviewSchema");
-const { validate } = require("../../models/reviewModel");
 
 router.post(
   "/reviews/create",
@@ -96,6 +95,40 @@ router.delete(
   authMiddleware,
   authorizeRoles("customer", "admin"),
   reviewController.deleteReview,
+);
+
+
+router.get(
+  "/reviews/owner/my-properties",
+  authMiddleware,
+  authorizeRoles("owner"),
+  reviewController.getOwnerReviews,
+);
+
+
+router.get(
+  "/reviews/agent/my-properties",
+  authMiddleware,
+  authorizeRoles("agent"),
+  reviewController.getAgentReviews,
+);
+
+// Owner/Agent reply to a review
+router.put(
+  "/reviews/:id/reply",
+  authMiddleware,
+  authorizeRoles("owner", "agent"),
+  reviewController.replyToReview,
+);
+
+// =====================================================
+// OWNER / AGENT — update review status
+// =====================================================
+router.put(
+  "/reviews/:id/status",
+  authMiddleware,
+  authorizeRoles("owner", "agent"),
+  reviewController.updateReviewStatusByOwner,
 );
 
 module.exports = router;

@@ -11,6 +11,8 @@ const Inquiryrouter = require('./APIs/InquiryRouter');
 const OwnerRouter = require('./APIs/ownerRouter');
 const AgentRouter = require('./APIs/agentRouter')
 const rentalRouter = require('./APIs/rentalRouter')
+const saleOfferRouter = require('./APIs/saleOfferRoutes')
+const saleTransaction = require('./APIs/saleTransactionRoutes')
 
 
 
@@ -22,8 +24,10 @@ router.use('/v5/api', appointmentRoute);
 router.use('/V6/api', reviewRoute);
 router.use('/v7/api', leaseRoute);
 router.use('/v8/api',OwnerRouter);
-router.use('/v9/api',AgentRouter)
-router.use("/v10/api",rentalRouter)
+router.use('/v9/api',AgentRouter);
+router.use("/v10/api",rentalRouter);
+router.use('/v11/api',saleOfferRouter);
+router.use('/v12/api',saleTransaction)
 
 
 

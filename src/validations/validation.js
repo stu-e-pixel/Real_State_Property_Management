@@ -1,7 +1,14 @@
 class Validation {
-  static validate(schema) {
+  static validate(schema, source = "body") {
     return (req, res, next) => {
-      const { error, value } = schema.validate(req.body, {
+      if (!schema || typeof schema.validate !== "function") {
+        return res.status(500).json({
+          success: false,
+          message: "Invalid validation schema",
+        });
+      }
+
+      const { error, value } = schema.validate(req[source], {
         abortEarly: false,
         allowUnknown: true,
         stripUnknown: true,
@@ -17,7 +24,7 @@ class Validation {
         });
       }
 
-      req.body = value;
+      req[source] = value;
       next();
     };
   }

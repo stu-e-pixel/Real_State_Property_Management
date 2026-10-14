@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const SaleOffer = require("../../models/saleOffer");
 const Property = require("../../models/property");
+const { notifySaleOfferAction } = require("../../services/notificationService");
 
 const getActorModel = (role) => {
   const models = {
@@ -421,6 +422,13 @@ class SaleOfferControllers {
       }
 
       await offer.save();
+
+      await notifySaleOfferAction({
+  offer,
+  property,
+  senderUser: req.user,
+  action,
+});
 
       return res.status(200).json({
         success: true,

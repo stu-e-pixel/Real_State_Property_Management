@@ -88,6 +88,18 @@ class PropertyController {
 
       const propertyData = await newProperty.save();
 
+      await createNotification({
+  recipient: property.owner,
+  recipientRole: "owner",
+  sender: req.user._id,
+  type: "property_approved",
+  title: "Property Approved 🎉",
+  message: `Your property "${property.title}" has been approved`,
+  link: "/owner/properties",
+  refId: property._id,
+  refModel: "Property",
+});
+
       return res.status(201).json({
         success: true,
         message: "Property created successfully",

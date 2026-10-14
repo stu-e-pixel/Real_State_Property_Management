@@ -1,6 +1,7 @@
 const statuscode = require("../../utils/statuscode");
 const Property = require("../../models/property");
 const Inquiry = require("../../models/inquiryModel");
+const { notifyInquiryCreated } = require("../../services/notificationService");
 
 class InquiryController {
   async createInquiry(req, res) {
@@ -45,6 +46,12 @@ class InquiryController {
         message: message,
         status: "pending",
       });
+
+      await notifyInquiryCreated({
+      inquiry,
+      property: existingfProperty,
+      senderUser: req.user,
+    });
 
       return res.status(statuscode.OK).json({
         status: true,

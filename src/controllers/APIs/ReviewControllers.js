@@ -2,6 +2,7 @@ const Review = require("../../models/reviewModel");
 const Property = require("../../models/property");
 const Appointment = require("../../models/appointmentModel");
 const mongoose = require("mongoose");
+const { notifyAllAdmins, createNotification } = require("../../services/notificationService");
 
 class ReviewControllers {
   // Create review:
@@ -60,6 +61,16 @@ class ReviewControllers {
         rating,
         comment,
       });
+
+      await notifyAllAdmins({
+  sender: req.user._id,
+  type: "review_created",
+  title: "New Review Pending",
+  message: `A new review on "${propertyData.title}" requires moderation`,
+  link: "/admin/allreview",
+  refId: review._id,
+  refModel: "Review",
+});
 
       return res.status(200).json({
         success: true,
@@ -566,6 +577,24 @@ class ReviewControllers {
         review.reason = reason || "";
 
         await review.save();
+
+        await createNotification({
+  recipient: review.user,
+  recipientRole: "customer",
+  sender: req.user._id,
+  type: action === "approve" ? "review_approved" : "review_rejected",
+  title:
+    action === "approve"
+      ? "Your Review Was Approved"
+      : "Your Review Was Rejected",
+  message:
+    action === "approve"
+      ? "Your review is now publicly visible"
+      : `Your review was rejected: ${reason || "No reason provided"}`,
+  link: "/user/reviews",
+  refId: review._id,
+  refModel: "Review",
+});
 
         return res.status(200).json({
           success: true,

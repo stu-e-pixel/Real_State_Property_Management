@@ -1,6 +1,7 @@
 const RentalApplication = require("../../models/rentalApplicationModel");
 const Property = require("../../models/property");
 const User = require("../../models/userModel");
+const { notifyRentalAction } = require("../../services/notificationService");
 
 class RentalApplicationController {
   async createRentalApplication(req, res) {
@@ -458,6 +459,13 @@ async getAgentRentalApplications(req, res) {
       }
 
       await application.save();
+
+      await notifyRentalAction({
+  application,
+  property,
+  senderUser: req.user,
+  action,
+});
 
       return res.status(200).json({
         success: true,

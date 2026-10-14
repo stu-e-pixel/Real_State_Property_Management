@@ -13,6 +13,7 @@ const AgentRouter = require('./APIs/agentRouter')
 const rentalRouter = require('./APIs/rentalRouter')
 const saleOfferRouter = require('./APIs/saleOfferRoutes')
 const saleTransaction = require('./APIs/saleTransactionRoutes')
+const notificationRouter = require('./APIs/notificationRouter')
 
 
 
@@ -28,7 +29,7 @@ router.use('/v9/api',AgentRouter);
 router.use("/v10/api",rentalRouter);
 router.use('/v11/api',saleOfferRouter);
 router.use('/v12/api',saleTransaction)
-
+router.use('/v13/api',notificationRouter)
 
 
 

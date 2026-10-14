@@ -1,5 +1,9 @@
 const Appointment = require("../../models/appointmentModel");
 const Property = require("../../models/property");
+const {
+  notifyAppointmentCreated,
+  notifyAppointmentAction,
+} = require("../../services/notificationService");
 
 const checkAppointmentAccess = async (appointment, user) => {
   // Agent
@@ -76,6 +80,12 @@ class AppointmentControllers {
         duration: duration || 60,
         message: message || "",
         status: "pending",
+      });
+
+      await notifyAppointmentCreated({
+        appointment,
+        property: propertyData,
+        senderUser: req.user,
       });
 
       return res.status(201).json({
@@ -206,54 +216,53 @@ class AppointmentControllers {
 
   // Owner - get all appointments:
   async getOwnerAllAppointments(req, res) {
-  try {
-    // 1. Find all owner properties with NO agent assigned
-    const properties = await Property.find({
-      owner: req.user._id,
-      isDeleted: false,
-      agentId: null,   // ✅ only properties without an agent
-    }).select("_id");
+    try {
+      // 1. Find all owner properties with NO agent assigned
+      const properties = await Property.find({
+        owner: req.user._id,
+        isDeleted: false,
+        agentId: null, // ✅ only properties without an agent
+      }).select("_id");
 
-    const propertyIds = properties.map((p) => p._id);
+      const propertyIds = properties.map((p) => p._id);
 
-    // 2. If the owner has no unassigned properties, return empty
-    if (propertyIds.length === 0) {
+      // 2. If the owner has no unassigned properties, return empty
+      if (propertyIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      // 3. Find appointments for those properties only
+      const appointments = await Appointment.find({
+        property: { $in: propertyIds },
+      })
+        .populate({
+          path: "property",
+          select: "title propertyType purpose price images location agentId",
+        })
+        .populate({
+          path: "user",
+          select: "name email phone image",
+        })
+        .sort({ appointmentDate: 1 });
+
       return res.status(200).json({
         success: true,
-        count: 0,
-        data: [],
+        count: appointments.length,
+        data: appointments,
+      });
+    } catch (error) {
+      console.error("GET OWNER APPOINTMENTS ERROR:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to get owner appointments",
+        error: error.message,
       });
     }
-
-    // 3. Find appointments for those properties only
-    const appointments = await Appointment.find({
-      property: { $in: propertyIds },
-    })
-      .populate({
-        path: "property",
-        select:
-          "title propertyType purpose price images location agentId",
-      })
-      .populate({
-        path: "user",
-        select: "name email phone image",
-      })
-      .sort({ appointmentDate: 1 });
-
-    return res.status(200).json({
-      success: true,
-      count: appointments.length,
-      data: appointments,
-    });
-  } catch (error) {
-    console.error("GET OWNER APPOINTMENTS ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get owner appointments",
-      error: error.message,
-    });
   }
-}
 
   // Owner/Agent - confirm/reject/reschedule/complete appointment:
   async appointmentAction(req, res) {
@@ -339,6 +348,13 @@ class AppointmentControllers {
 
       await appointment.save();
 
+      await notifyAppointmentAction({
+        appointment,
+        property,
+        senderUser: req.user,
+        action,
+      });
+
       return res.status(200).json({
         success: true,
         message: `Appointment ${action} successful`,
@@ -417,37 +433,37 @@ class AppointmentControllers {
   }
 
   async getAllAppointments(req, res) {
-  try {
-    const appointments = await Appointment.find()
-      .populate({
-        path: "property",
-        select:
-          "title propertyType purpose price images location agentId owner",
-      })
-      .populate({
-        path: "user",
-        select: "name email phone image role",
-      })
-      .populate({
-        path: "agent",
-        select: "name email phone image role",
-      })
-      .sort({ appointmentDate: -1 });
+    try {
+      const appointments = await Appointment.find()
+        .populate({
+          path: "property",
+          select:
+            "title propertyType purpose price images location agentId owner",
+        })
+        .populate({
+          path: "user",
+          select: "name email phone image role",
+        })
+        .populate({
+          path: "agent",
+          select: "name email phone image role",
+        })
+        .sort({ appointmentDate: -1 });
 
-    return res.status(200).json({
-      success: true,
-      count: appointments.length,
-      data: appointments,
-    });
-  } catch (error) {
-    console.error("GET ALL APPOINTMENTS ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get appointments",
-      error: error.message,
-    });
+      return res.status(200).json({
+        success: true,
+        count: appointments.length,
+        data: appointments,
+      });
+    } catch (error) {
+      console.error("GET ALL APPOINTMENTS ERROR:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to get appointments",
+        error: error.message,
+      });
+    }
   }
-}
 
   // Check access - owner/agent:
 }

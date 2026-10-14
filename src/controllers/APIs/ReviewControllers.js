@@ -2,7 +2,10 @@ const Review = require("../../models/reviewModel");
 const Property = require("../../models/property");
 const Appointment = require("../../models/appointmentModel");
 const mongoose = require("mongoose");
-const { notifyAllAdmins, createNotification } = require("../../services/notificationService");
+const {
+  notifyAllAdmins,
+  createNotification,
+} = require("../../services/notificationService");
 
 class ReviewControllers {
   // Create review:
@@ -63,14 +66,14 @@ class ReviewControllers {
       });
 
       await notifyAllAdmins({
-  sender: req.user._id,
-  type: "review_created",
-  title: "New Review Pending",
-  message: `A new review on "${propertyData.title}" requires moderation`,
-  link: "/admin/allreview",
-  refId: review._id,
-  refModel: "Review",
-});
+        sender: req.user._id,
+        type: "review_created",
+        title: "New Review Pending",
+        message: `A new review on "${propertyData.title}" requires moderation`,
+        link: "/admin/allreview",
+        refId: review._id,
+        refModel: "Review",
+      });
 
       return res.status(200).json({
         success: true,
@@ -579,22 +582,22 @@ class ReviewControllers {
         await review.save();
 
         await createNotification({
-  recipient: review.user,
-  recipientRole: "customer",
-  sender: req.user._id,
-  type: action === "approve" ? "review_approved" : "review_rejected",
-  title:
-    action === "approve"
-      ? "Your Review Was Approved"
-      : "Your Review Was Rejected",
-  message:
-    action === "approve"
-      ? "Your review is now publicly visible"
-      : `Your review was rejected: ${reason || "No reason provided"}`,
-  link: "/user/reviews",
-  refId: review._id,
-  refModel: "Review",
-});
+          recipient: review.user,
+          recipientRole: "customer",
+          sender: req.user._id,
+          type: action === "approve" ? "review_approved" : "review_rejected",
+          title:
+            action === "approve"
+              ? "Your Review Was Approved"
+              : "Your Review Was Rejected",
+          message:
+            action === "approve"
+              ? "Your review is now publicly visible"
+              : `Your review was rejected: ${reason || "No reason provided"}`,
+          link: "/user/reviews",
+          refId: review._id,
+          refModel: "Review",
+        });
 
         return res.status(200).json({
           success: true,
@@ -1023,112 +1026,111 @@ class ReviewControllers {
   }
 
   // =====================================================
-// OWNER / AGENT — Approve or reject a review
-// =====================================================
+  // OWNER / AGENT — Approve or reject a review
+  // =====================================================
 
-async updateReviewStatusByOwner(req, res) {
-  try {
-    const { id } = req.params;
-    const { status, reason } = req.body;
+  async updateReviewStatusByOwner(req, res) {
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body;
 
-    const actorId = req.user._id;
-    const role = String(req.user.role || "").toLowerCase();
+      const actorId = req.user._id;
+      const role = String(req.user.role || "").toLowerCase();
 
-    if (!["owner", "agent"].includes(role)) {
-      return res.status(403).json({
+      if (!["owner", "agent"].includes(role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only owners or agents can update review status",
+        });
+      }
+
+      if (!["approved", "rejected"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Status must be approved or rejected",
+        });
+      }
+
+      if (status === "rejected" && (!reason || !reason.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: "Rejection reason is required",
+        });
+      }
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid review ID",
+        });
+      }
+
+      const review = await Review.findById(id);
+
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          message: "Review not found",
+        });
+      }
+
+      const property = await Property.findById(review.property);
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: "Property not found",
+        });
+      }
+
+      const propertyOwnerId = String(property.owner?._id || property.owner);
+      const propertyAgentId = property.agentId
+        ? String(property.agentId?._id || property.agentId)
+        : null;
+
+      // Owner handles when agentId is null
+      const isOwner = role === "owner" && propertyOwnerId === String(actorId);
+
+      // Agent handles when agentId matches
+      const isAssignedAgent =
+        role === "agent" &&
+        propertyAgentId !== null &&
+        propertyAgentId === String(actorId);
+
+      if (!isOwner && !isAssignedAgent) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to update this review status",
+        });
+      }
+
+      review.status = status;
+
+      if (status === "rejected") {
+        review.reason = reason.trim();
+      } else {
+        review.reason = "";
+      }
+
+      await review.save();
+
+      return res.status(200).json({
+        success: true,
+        message:
+          status === "approved"
+            ? "Review approved successfully"
+            : "Review rejected successfully",
+        review,
+      });
+    } catch (error) {
+      console.error("Update Review Status By Owner:", error);
+      return res.status(500).json({
         success: false,
-        message: "Only owners or agents can update review status",
+        message: "Failed to update review status",
+        error: error.message,
       });
     }
-
-    if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Status must be approved or rejected",
-      });
-    }
-
-    if (status === "rejected" && (!reason || !reason.trim())) {
-      return res.status(400).json({
-        success: false,
-        message: "Rejection reason is required",
-      });
-    }
-
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid review ID",
-      });
-    }
-
-    const review = await Review.findById(id);
-
-    if (!review) {
-      return res.status(404).json({
-        success: false,
-        message: "Review not found",
-      });
-    }
-
-    const property = await Property.findById(review.property);
-
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        message: "Property not found",
-      });
-    }
-
-    const propertyOwnerId = String(property.owner?._id || property.owner);
-    const propertyAgentId = property.agentId
-      ? String(property.agentId?._id || property.agentId)
-      : null;
-
-    // Owner handles when agentId is null
-    const isOwner =
-      role === "owner" && propertyOwnerId === String(actorId);
-
-    // Agent handles when agentId matches
-    const isAssignedAgent =
-      role === "agent" &&
-      propertyAgentId !== null &&
-      propertyAgentId === String(actorId);
-
-    if (!isOwner && !isAssignedAgent) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to update this review status",
-      });
-    }
-
-    review.status = status;
-
-    if (status === "rejected") {
-      review.reason = reason.trim();
-    } else {
-      review.reason = "";
-    }
-
-    await review.save();
-
-    return res.status(200).json({
-      success: true,
-      message:
-        status === "approved"
-          ? "Review approved successfully"
-          : "Review rejected successfully",
-      review,
-    });
-  } catch (error) {
-    console.error("Update Review Status By Owner:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update review status",
-      error: error.message,
-    });
   }
-}
 }
 
 module.exports = new ReviewControllers();

@@ -279,6 +279,15 @@ class AppointmentControllers {
         });
       }
 
+      const property = await Property.findById(appointment.property);
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: "Property not found",
+        });
+      }
+
       // Check access:
       const hasAccess = await checkAppointmentAccess(appointment, req.user);
 
@@ -314,25 +323,44 @@ class AppointmentControllers {
       }
 
       // Reschedule:
-      else if (action === "reshedule") {
-        if (!["pending", "rescheduled"].includes(appointment.status)) {
-          return res.status(400).json({
-            success: false,
-            message: "Appointment cannot be resheduled",
-          });
-        }
+      
+else if (action === "reschedule") {
+  if (!["pending", "confirmed", "rescheduled"].includes(appointment.status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Appointment cannot be rescheduled",
+    });
+  }
 
-        appointment.appointmentDate = appointmentDate;
+  if (!appointmentDate) {
+    return res.status(400).json({
+      success: false,
+      message: "New appointment date is required",
+    });
+  }
 
-        if (duration !== undefined) {
-          appointment.duration = duration;
-        }
-        if (message !== undefined) {
-          appointment.message = message;
-        }
+  const newDate = new Date(appointmentDate);
 
-        appointment.status = "rescheduled";
-      }
+  if (Number.isNaN(newDate.getTime())) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid appointment date",
+    });
+  }
+
+  appointment.appointmentDate = newDate;
+
+  if (duration !== undefined) {
+    appointment.duration = duration;
+  }
+
+  if (message !== undefined) {
+    appointment.message = message;
+  }
+
+  appointment.status = "rescheduled";
+}
+
 
       // Complete:
       else if (action === "complete") {

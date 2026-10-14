@@ -3,6 +3,7 @@ const Property = require("../../models/property");
 const cloudinary = require("../../config/cloudinary.config");
 const Owner = require("../../models/ownerModel");
 const Agent = require("../../models/agentmodel");
+const { createNotification } = require("../../services/notificationService");
 
 class PropertyController {
   async createProperty(req, res) {
@@ -89,16 +90,16 @@ class PropertyController {
       const propertyData = await newProperty.save();
 
       await createNotification({
-  recipient: property.owner,
-  recipientRole: "owner",
-  sender: req.user._id,
-  type: "property_approved",
-  title: "Property Approved 🎉",
-  message: `Your property "${property.title}" has been approved`,
-  link: "/owner/properties",
-  refId: property._id,
-  refModel: "Property",
-});
+        recipient: propertyData.owner,
+        recipientRole: "owner",
+        sender: req.user._id,
+        type: "system",
+        title: "Property Submitted Successfully",
+        message: `Your property "${propertyData.title}" has been submitted and is waiting for admin approval.`,
+        link: "/owner/properties",
+        refId: propertyData._id,
+        refModel: "Property",
+      });
 
       return res.status(201).json({
         success: true,
@@ -597,178 +598,179 @@ class PropertyController {
   }
 
   async getMyApprovedProperties(req, res) {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    try {
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
 
-    const { search, purpose } = req.query;
+      const { search, purpose } = req.query;
 
-    // ✅ Agent ID always comes from the authenticated user
-    const agentId = req.user._id;
+      // ✅ Agent ID always comes from the authenticated user
+      const agentId = req.user._id;
 
-    const matchStage = {
-      agentId,
-      approvalStatus: "Approved",
-      isDeleted: false,
-    };
+      const matchStage = {
+        agentId,
+        approvalStatus: "Approved",
+        isDeleted: false,
+      };
 
-    if (purpose) {
-      matchStage.purpose = purpose;
+      if (purpose) {
+        matchStage.purpose = purpose;
+      }
+
+      if (search) {
+        matchStage.title = { $regex: search, $options: "i" };
+      }
+
+      const [properties, total] = await Promise.all([
+        Property.find(matchStage)
+          .populate("owner", "name email phone image address")
+          .populate(
+            "agentId",
+            "name email phone image agencyName specialization",
+          )
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+
+        Property.countDocuments(matchStage),
+      ]);
+
+      return res.status(statuscode.OK).json({
+        status: true,
+        message: "Your approved properties fetched successfully",
+        totalProperty: total,
+        currentPage: page,
+        totalpage: Math.ceil(total / limit),
+        data: properties,
+      });
+    } catch (error) {
+      console.error("GET MY APPROVED PROPERTIES ERROR:", error);
+      return res.status(statuscode.SERVER_ERROR).json({
+        status: false,
+        message: error.message,
+      });
     }
-
-    if (search) {
-      matchStage.title = { $regex: search, $options: "i" };
-    }
-
-    const [properties, total] = await Promise.all([
-      Property.find(matchStage)
-        .populate("owner", "name email phone image address")
-        .populate("agentId", "name email phone image agencyName specialization")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-
-      Property.countDocuments(matchStage),
-    ]);
-
-    return res.status(statuscode.OK).json({
-      status: true,
-      message: "Your approved properties fetched successfully",
-      totalProperty: total,
-      currentPage: page,
-      totalpage: Math.ceil(total / limit),
-      data: properties,
-    });
-  } catch (error) {
-    console.error("GET MY APPROVED PROPERTIES ERROR:", error);
-    return res.status(statuscode.SERVER_ERROR).json({
-      status: false,
-      message: error.message,
-    });
   }
-}
 
-async getPublicApprovedProperties(req, res) {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
+  async getPublicApprovedProperties(req, res) {
+    try {
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 12;
+      const skip = (page - 1) * limit;
 
-    const {
-      search,
-      purpose,
-      propertyType,
-      minprice,
-      maxprice,
-      bedrooms,
-      furnishingStatus,
-      sortBy = "createdAt",
-      sortOrder = "desc",
-    } = req.query;
+      const {
+        search,
+        purpose,
+        propertyType,
+        minprice,
+        maxprice,
+        bedrooms,
+        furnishingStatus,
+        sortBy = "createdAt",
+        sortOrder = "desc",
+      } = req.query;
 
-    // Only approved + not deleted
-    const matchStage = {
-      approvalStatus: "Approved",
-      isDeleted: false,
-    };
+      // Only approved + not deleted
+      const matchStage = {
+        approvalStatus: "Approved",
+        isDeleted: false,
+      };
 
-    if (search) {
-      matchStage.title = { $regex: search, $options: "i" };
+      if (search) {
+        matchStage.title = { $regex: search, $options: "i" };
+      }
+
+      if (purpose) {
+        matchStage.purpose = purpose;
+      }
+
+      if (propertyType) {
+        matchStage.propertyType = propertyType;
+      }
+
+      if (furnishingStatus) {
+        matchStage.furnishingStatus = furnishingStatus;
+      }
+
+      if (bedrooms) {
+        matchStage.bedrooms = { $gte: Number(bedrooms) };
+      }
+
+      if (minprice || maxprice) {
+        matchStage.price = {};
+        if (minprice) matchStage.price.$gte = Number(minprice);
+        if (maxprice) matchStage.price.$lte = Number(maxprice);
+      }
+
+      // Sort whitelist
+      const allowedSortFields = ["price", "createdAt", "area", "bedrooms"];
+      const finalSortBy = allowedSortFields.includes(sortBy)
+        ? sortBy
+        : "createdAt";
+      const finalSortOrder = sortOrder === "asc" ? 1 : -1;
+
+      const [properties, total] = await Promise.all([
+        Property.find(matchStage)
+          .populate("owner", "name email phone image")
+          .populate("agentId", "name email phone image agencyName")
+          .sort({ [finalSortBy]: finalSortOrder })
+          .skip(skip)
+          .limit(limit),
+
+        Property.countDocuments(matchStage),
+      ]);
+
+      return res.status(statuscode.OK).json({
+        status: true,
+        message: "Approved properties fetched successfully",
+        totalProperty: total,
+        currentPage: page,
+        totalpage: Math.ceil(total / limit),
+        data: properties,
+      });
+    } catch (error) {
+      console.error("GET PUBLIC APPROVED ERROR:", error);
+      return res.status(statuscode.SERVER_ERROR).json({
+        status: false,
+        message: error.message,
+      });
     }
+  }
 
-    if (purpose) {
-      matchStage.purpose = purpose;
-    }
+  // =====================================================
+  // OWNER — Get all their properties
+  // =====================================================
 
-    if (propertyType) {
-      matchStage.propertyType = propertyType;
-    }
+  async getOwnerProperties(req, res) {
+    try {
+      const ownerId = req.user._id;
 
-    if (furnishingStatus) {
-      matchStage.furnishingStatus = furnishingStatus;
-    }
-
-    if (bedrooms) {
-      matchStage.bedrooms = { $gte: Number(bedrooms) };
-    }
-
-    if (minprice || maxprice) {
-      matchStage.price = {};
-      if (minprice) matchStage.price.$gte = Number(minprice);
-      if (maxprice) matchStage.price.$lte = Number(maxprice);
-    }
-
-    // Sort whitelist
-    const allowedSortFields = ["price", "createdAt", "area", "bedrooms"];
-    const finalSortBy = allowedSortFields.includes(sortBy)
-      ? sortBy
-      : "createdAt";
-    const finalSortOrder = sortOrder === "asc" ? 1 : -1;
-
-    const [properties, total] = await Promise.all([
-      Property.find(matchStage)
+      const properties = await Property.find({
+        owner: ownerId,
+        isDeleted: false,
+      })
+        .select(
+          "title propertyType purpose price area bedrooms bathrooms images location status approvalStatus agentId owner createdAt",
+        )
         .populate("owner", "name email phone image")
-        .populate("agentId", "name email phone image agencyName")
-        .sort({ [finalSortBy]: finalSortOrder })
-        .skip(skip)
-        .limit(limit),
+        .populate("agentId", "name email phone image")
+        .sort({ createdAt: -1 });
 
-      Property.countDocuments(matchStage),
-    ]);
+      return res.status(statuscode.OK).json({
+        status: true,
+        count: properties.length,
+        message: "Owner properties fetched successfully",
+        data: properties,
+      });
+    } catch (error) {
+      console.error("GET OWNER PROPERTIES ERROR:", error);
 
-    return res.status(statuscode.OK).json({
-      status: true,
-      message: "Approved properties fetched successfully",
-      totalProperty: total,
-      currentPage: page,
-      totalpage: Math.ceil(total / limit),
-      data: properties,
-    });
-  } catch (error) {
-    console.error("GET PUBLIC APPROVED ERROR:", error);
-    return res.status(statuscode.SERVER_ERROR).json({
-      status: false,
-      message: error.message,
-    });
+      return res.status(statuscode.SERVER_ERROR).json({
+        status: false,
+        message: error.message,
+      });
+    }
   }
-}
-
-// =====================================================
-// OWNER — Get all their properties
-// =====================================================
-
-async getOwnerProperties(req, res) {
-  try {
-    const ownerId = req.user._id;
-
-    const properties = await Property.find({
-      owner: ownerId,
-      isDeleted: false,
-    })
-      .select(
-        "title propertyType purpose price area bedrooms bathrooms images location status approvalStatus agentId owner createdAt"
-      )
-      .populate("owner", "name email phone image")
-      .populate("agentId", "name email phone image")
-      .sort({ createdAt: -1 });
-
-    return res.status(statuscode.OK).json({
-      status: true,
-      count: properties.length,
-      message: "Owner properties fetched successfully",
-      data: properties,
-    });
-  } catch (error) {
-    console.error("GET OWNER PROPERTIES ERROR:", error);
-
-    return res.status(statuscode.SERVER_ERROR).json({
-      status: false,
-      message: error.message,
-    });
-  }
-}
-
-
 }
 module.exports = new PropertyController();

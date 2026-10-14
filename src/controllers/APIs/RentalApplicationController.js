@@ -40,7 +40,8 @@ class RentalApplicationController {
       if (propertyData.purpose !== "Rent") {
         return res.status(400).json({
           success: false,
-          message: "Rental application can only be created for rental properties",
+          message:
+            "Rental application can only be created for rental properties",
         });
       }
 
@@ -121,38 +122,37 @@ class RentalApplicationController {
   }
 
   async updateRentalApplication(req, res) {
-  try {
-    const { id } = req.params;
+    try {
+      const { id } = req.params;
 
-    const {
-      monthlyIncome,
-      employmentStatus,
-      occupation,
-      documents,
-      message,
-    } = req.body;
+      const {
+        monthlyIncome,
+        employmentStatus,
+        occupation,
+        documents,
+        message,
+      } = req.body;
 
-    const application = await RentalApplication.findOne({
-      _id: id,
-      applicant: req.user._id,
-    });
-
-    if (!application) {
-      return res.status(404).json({
-        success: false,
-        message: "Rental application not found",
+      const application = await RentalApplication.findOne({
+        _id: id,
+        applicant: req.user._id,
       });
-    }
 
-    if (application.status !== "pending") {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending rental applications can be updated",
-      });
-    }
+      if (!application) {
+        return res.status(404).json({
+          success: false,
+          message: "Rental application not found",
+        });
+      }
 
-    const updatedApplication =
-      await RentalApplication.findByIdAndUpdate(
+      if (application.status !== "pending") {
+        return res.status(400).json({
+          success: false,
+          message: "Only pending rental applications can be updated",
+        });
+      }
+
+      const updatedApplication = await RentalApplication.findByIdAndUpdate(
         id,
         {
           $set: {
@@ -166,25 +166,24 @@ class RentalApplicationController {
         {
           new: true,
           runValidators: true,
-        }
+        },
       );
 
-    return res.status(200).json({
-      success: true,
-      message: "Rental application updated successfully",
-      data: updatedApplication,
-    });
-  } catch (error) {
-    console.error("UPDATE RENTAL APPLICATION ERROR:", error);
+      return res.status(200).json({
+        success: true,
+        message: "Rental application updated successfully",
+        data: updatedApplication,
+      });
+    } catch (error) {
+      console.error("UPDATE RENTAL APPLICATION ERROR:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update rental application",
-      error: error.message,
-    });
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update rental application",
+        error: error.message,
+      });
+    }
   }
-}
-
 
   async getMyRentalApplications(req, res) {
     try {
@@ -303,102 +302,97 @@ class RentalApplicationController {
   }
 
   async getOwnerRentalApplications(req, res) {
-  try {
-    // 1. Find owner's properties that have NO agent assigned
-    const properties = await Property.find({
-      owner: req.user._id,
-      isDeleted: false,
-      $or: [
-        { agentId: null },
-        { agentId: { $exists: false } },
-      ],
-    }).select("_id");
+    try {
+      // 1. Find owner's properties that have NO agent assigned
+      const properties = await Property.find({
+        owner: req.user._id,
+        isDeleted: false,
+        $or: [{ agentId: null }, { agentId: { $exists: false } }],
+      }).select("_id");
 
-    const propertyIds = properties.map((property) => property._id);
+      const propertyIds = properties.map((property) => property._id);
 
-    // 2. If owner has no direct properties
-    if (propertyIds.length === 0) {
+      // 2. If owner has no direct properties
+      if (propertyIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      // 3. Get rental applications only for those properties
+      const applications = await RentalApplication.find({
+        owner: req.user._id,
+        property: { $in: propertyIds },
+      })
+        .populate({
+          path: "property",
+          select:
+            "title description propertyType purpose price area bedrooms bathrooms furnishingStatus images status approvalStatus location amenities agentId",
+        })
+        .populate({
+          path: "applicant",
+          select: "name email phone",
+        })
+        .populate({
+          path: "agent",
+          select: "name email phone",
+        })
+        .sort({ createdAt: -1 });
+
       return res.status(200).json({
         success: true,
-        count: 0,
-        data: [],
+        count: applications.length,
+        data: applications,
+      });
+    } catch (error) {
+      console.error("GET OWNER RENTAL APPLICATIONS ERROR:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to get owner rental applications",
+        error: error.message,
       });
     }
-
-    // 3. Get rental applications only for those properties
-    const applications = await RentalApplication.find({
-      owner: req.user._id,
-      property: { $in: propertyIds },
-    })
-      .populate({
-        path: "property",
-        select:
-          "title description propertyType purpose price area bedrooms bathrooms furnishingStatus images status approvalStatus location amenities agentId",
-      })
-      .populate({
-        path: "applicant",
-        select: "name email phone",
-      })
-      .populate({
-        path: "agent",
-        select: "name email phone",
-      })
-      .sort({ createdAt: -1 });
-
-    return res.status(200).json({
-      success: true,
-      count: applications.length,
-      data: applications,
-    });
-  } catch (error) {
-    console.error("GET OWNER RENTAL APPLICATIONS ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get owner rental applications",
-      error: error.message,
-    });
   }
-}
 
-  
-async getAgentRentalApplications(req, res) {
-  try {
-    const applications = await RentalApplication.find({
-      agent: req.user._id,
-    })
-      .populate({
-        path: "property",
-        select:
-          "title description propertyType purpose price area bedrooms bathrooms furnishingStatus images status approvalStatus location amenities",
+  async getAgentRentalApplications(req, res) {
+    try {
+      const applications = await RentalApplication.find({
+        agent: req.user._id,
       })
-      .populate({
-        path: "applicant",
-        select: "name email phone image",
-      })
-      .populate({
-        path: "owner",
-        select: "name email phone image",
-      })
-      .sort({ createdAt: -1 });
+        .populate({
+          path: "property",
+          select:
+            "title description propertyType purpose price area bedrooms bathrooms furnishingStatus images status approvalStatus location amenities",
+        })
+        .populate({
+          path: "applicant",
+          select: "name email phone image",
+        })
+        .populate({
+          path: "owner",
+          select: "name email phone image",
+        })
+        .sort({ createdAt: -1 });
 
-    return res.status(200).json({
-      success: true,
-      count: applications.length,
-      data: applications,
-    });
-  } catch (error) {
-    console.error("GET AGENT RENTAL APPLICATIONS ERROR:", error);
+      return res.status(200).json({
+        success: true,
+        count: applications.length,
+        data: applications,
+      });
+    } catch (error) {
+      console.error("GET AGENT RENTAL APPLICATIONS ERROR:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get agent rental applications",
-      error: error.message,
-    });
+      return res.status(500).json({
+        success: false,
+        message: "Failed to get agent rental applications",
+        error: error.message,
+      });
+    }
   }
-}
 
- 
   async rentalApplicationAction(req, res) {
     try {
       const { id } = req.params;
@@ -413,6 +407,15 @@ async getAgentRentalApplications(req, res) {
         });
       }
 
+      const property = await Property.findById(application.property);
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: "Property not found",
+        });
+      }
+
       // Application must be pending
       if (application.status !== "pending") {
         return res.status(400).json({
@@ -423,9 +426,7 @@ async getAgentRentalApplications(req, res) {
 
       // Check authorization
       if (req.user.role === "owner") {
-        if (
-          application.owner.toString() !== req.user._id.toString()
-        ) {
+        if (application.owner.toString() !== req.user._id.toString()) {
           return res.status(403).json({
             success: false,
             message: "You are not authorized to manage this application",
@@ -461,11 +462,11 @@ async getAgentRentalApplications(req, res) {
       await application.save();
 
       await notifyRentalAction({
-  application,
-  property,
-  senderUser: req.user,
-  action,
-});
+        application,
+        property,
+        senderUser: req.user,
+        action,
+      });
 
       return res.status(200).json({
         success: true,
@@ -486,7 +487,6 @@ async getAgentRentalApplications(req, res) {
     }
   }
 
-  
   async withdrawRentalApplication(req, res) {
     try {
       const { id } = req.params;
@@ -500,9 +500,7 @@ async getAgentRentalApplications(req, res) {
         });
       }
 
-      if (
-        application.applicant.toString() !== req.user._id.toString()
-      ) {
+      if (application.applicant.toString() !== req.user._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "You are not authorized to withdraw this application",
